@@ -1,4 +1,5 @@
 name: CI
+
 on:
   push:
     branches: [ main ]
@@ -6,36 +7,65 @@ on:
 jobs:
   build:
     runs-on: ubuntu-20.04
+    timeout-minutes: 30 # Увеличение таймаута до 30 минут
 
     steps:
-      - uses: actions/checkout@v2
+    - uses: actions/checkout@v2
 
-      - name: Get Date
-        id: get-date
-        run: |
-          echo "::set-output name=date::$(/bin/date -u "+%Y%m%d")"
-        shell: bash
+    - name: Get Date
+      id: get-date
+      run: echo "::set-output name=date::$(/bin/date -u '+%Y%m%d')"
+      shell: bash
 
-      - name: Cache Buildozer global directory
-        uses: actions/cache@v2
-        with:
-          path: .buildozer_global
-          key: buildozer-global-${{ hashFiles('buildozer.spec') }} # Replace with your path
+    - name: Cache Buildozer global directory
+      uses: actions/cache@v2
+      with:
+        path: .buildozer_global
+        key: buildozer-global-${{ hashFiles('buildozer.spec') }}-${{ steps.get-date.outputs.date }}
 
-      - uses: actions/cache@v2
-        with:
-          path: .buildozer
-          key: ${{ runner.os }}-${{ steps.get-date.outputs.date }}-${{ hashFiles('buildozer.spec') }}
+    - uses: actions/cache@v2
+      with:
+        path: .buildozer
+        key: ${{ runner.os }}-buildozer-${{ hashFiles('buildozer.spec') }}-${{ steps.get-date.outputs.date }}
 
-      - name: Build with Buildozer
-        uses: ArtemSBulgakov/buildozer-action@v1
-        id: buildozer
-        with:
-          command: buildozer android debug
-          buildozer_version: stable
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.x'
 
-      - name: Upload artifacts 
-        uses: actions/upload-artifact@v2
-        with:
-          name: package
-          path: ${{ steps.buildozer.outputs.test }}
+    - name: Install dependencies
+      run: |
+        sudo apt update
+        sudo apt install -y \
+          python3 \
+          python3-pip \
+          python3-setuptools \
+          python3-venv \
+          build-essential \
+          libssl-dev \
+          libffi-dev \
+          python3-dev \
+          libltdl-dev \
+          libncurses5 \
+          libtinfo5 \
+          zlib1g-dev \
+          libsqlite3-dev \
+          libgmp-dev \
+          libgmp10 \
+          default-jdk \
+          unzip
+        pip install --upgrade pip
+        pip install buildozer cython==0.29.21
+
+    - name: Build with Buildozer
+      uses: ArtemSBulgakov/buildozer-action@v1
+      id: buildozer
+      with:
+        command: android debug
+        buildozer_version: stable
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v2
+      with:
+        name: package
+        path: .buildozer/android/platform/build/dists/*/bin/*.apk
